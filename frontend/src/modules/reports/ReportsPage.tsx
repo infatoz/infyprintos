@@ -279,43 +279,57 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 }
 
 function RankTable({ title, rows }: { title: string; rows: Array<{ id: string; name?: string; meta?: string; value: number }> }) {
+  const table = useClientTable(rows, (r) => `${r.name ?? ""} ${r.meta ?? ""} ${r.value}`);
   return (
     <Card className="overflow-hidden">
-      <h3 className="px-4 pt-4 text-[14px] font-semibold">{title}</h3>
+      <div className="flex items-center justify-between gap-3 px-4 pt-4">
+        <h3 className="text-[14px] font-semibold">{title}</h3>
+      </div>
       {rows.length === 0 ? (
         <Empty title={`No ${title.toLowerCase()} yet`} />
       ) : (
-        <table className="app-table mt-1 w-full">
-          <thead>
-            <tr>
-              <Th>{title.slice(0, -1)}</Th>
-              <Th className="text-right">Value</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <Td>
-                  <div>{r.name}</div>
-                  {r.meta ? <div className="text-[11px] text-muted">{r.meta}</div> : null}
-                </Td>
-                <Td mono className="text-right">
-                  {inr(r.value)}
-                </Td>
+        <>
+          <div className="px-4 py-2">
+            <TableSearch value={table.search} onChange={table.setSearch} placeholder={`Search ${title.toLowerCase()}`} />
+          </div>
+          <table className="app-table mt-1 w-full">
+            <thead>
+              <tr>
+                <SortTh id="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+                  {title.slice(0, -1)}
+                </SortTh>
+                <SortTh id="value" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} className="text-right">
+                  Value
+                </SortTh>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {table.rows.map((r) => (
+                <tr key={r.id}>
+                  <Td>
+                    <div>{r.name}</div>
+                    {r.meta ? <div className="text-[11px] text-muted">{r.meta}</div> : null}
+                  </Td>
+                  <Td mono className="text-right">
+                    {inr(r.value)}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <TablePager page={table.page} pages={table.pages} total={table.total} onPage={table.setPage} noun={title.toLowerCase()} />
+        </>
       )}
     </Card>
   );
 }
 
 function GstPanel({ data, loading }: { data: Record<string, unknown> | undefined; loading: boolean }) {
-  if (loading) return <Skeleton className="h-40" />;
   const gst = data ?? {};
   const rates = (gst.rates as Array<{ taxRate: number; lines: number; qty: number; taxable: number; tax: number; lineTotal: number }>) ?? [];
   const place = (gst.place as Array<{ place: string; taxable: number; tax: number; orders: number }>) ?? [];
+  const rateTable = useClientTable(rates, (r) => `${r.taxRate} ${r.taxable} ${r.tax}`);
+  if (loading) return <Skeleton className="h-40" />;
   return (
     <>
       <KpiRow>
@@ -330,34 +344,42 @@ function GstPanel({ data, loading }: { data: Record<string, unknown> | undefined
           {rates.length === 0 ? (
             <Empty title="No taxable lines" />
           ) : (
-            <table className="app-table mt-1 w-full">
-              <thead>
-                <tr>
-                  <Th>Rate</Th>
-                  <Th className="text-right">Lines</Th>
-                  <Th className="text-right">Taxable</Th>
-                  <Th className="text-right">Tax</Th>
-                  <Th className="text-right">Line total</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rates.map((r) => (
-                  <tr key={r.taxRate}>
-                    <Td>{r.taxRate}%</Td>
-                    <Td className="text-right">{r.lines}</Td>
-                    <Td mono className="text-right">
-                      {inr(r.taxable)}
-                    </Td>
-                    <Td mono className="text-right">
-                      {inr(r.tax)}
-                    </Td>
-                    <Td mono className="text-right">
-                      {inr(r.lineTotal)}
-                    </Td>
+            <>
+              <div className="px-4 py-2">
+                <TableSearch value={rateTable.search} onChange={rateTable.setSearch} placeholder="Search rates" />
+              </div>
+              <table className="app-table mt-1 w-full">
+                <thead>
+                  <tr>
+                    <SortTh id="taxRate" sortKey={rateTable.sortKey} sortDir={rateTable.sortDir} onSort={rateTable.toggleSort}>
+                      Rate
+                    </SortTh>
+                    <Th className="text-right">Lines</Th>
+                    <Th className="text-right">Taxable</Th>
+                    <Th className="text-right">Tax</Th>
+                    <Th className="text-right">Line total</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rateTable.rows.map((r) => (
+                    <tr key={r.taxRate}>
+                      <Td>{r.taxRate}%</Td>
+                      <Td className="text-right">{r.lines}</Td>
+                      <Td mono className="text-right">
+                        {inr(r.taxable)}
+                      </Td>
+                      <Td mono className="text-right">
+                        {inr(r.tax)}
+                      </Td>
+                      <Td mono className="text-right">
+                        {inr(r.lineTotal)}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <TablePager page={rateTable.page} pages={rateTable.pages} total={rateTable.total} onPage={rateTable.setPage} noun="rates" />
+            </>
           )}
         </Card>
         <Card className="p-5">
@@ -388,7 +410,6 @@ function AgingPanel({
   live?: number;
   count?: number;
 }) {
-  if (loading) return <Skeleton className="h-40" />;
   const aging = data ?? {};
   const buckets = (aging.buckets as { current: number; days31_60: number; days61_90: number; days90plus: number }) ?? {
     current: 0,
@@ -398,6 +419,8 @@ function AgingPanel({
   };
   const rows =
     (aging.rows as Array<{ id: string; number: string; customer?: string; bucket: string; days: number; balanceDue: number; dueDate?: string; status?: string }>) ?? [];
+  const invoiceTable = useClientTable(rows, (r) => `${r.number} ${r.customer ?? ""} ${r.bucket}`);
+  if (loading) return <Skeleton className="h-40" />;
   const chart = [
     { bucket: "0–30", amount: buckets.current },
     { bucket: "31–60", amount: buckets.days31_60 },
@@ -432,18 +455,26 @@ function AgingPanel({
           {rows.length === 0 ? (
             <Empty title="No open invoices" hint="Unpaid tax invoices appear here." />
           ) : (
-            <table className="app-table mt-1 w-full">
-              <thead>
-                <tr>
-                  <Th>Invoice</Th>
-                  <Th>Customer</Th>
-                  <Th>Due</Th>
-                  <Th>Age</Th>
-                  <Th className="text-right">Balance</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
+            <>
+              <div className="px-4 py-2">
+                <TableSearch value={invoiceTable.search} onChange={invoiceTable.setSearch} placeholder="Search invoices" />
+              </div>
+              <table className="app-table mt-1 w-full">
+                <thead>
+                  <tr>
+                    <SortTh id="number" sortKey={invoiceTable.sortKey} sortDir={invoiceTable.sortDir} onSort={invoiceTable.toggleSort}>
+                      Invoice
+                    </SortTh>
+                    <Th>Customer</Th>
+                    <Th>Due</Th>
+                    <Th>Age</Th>
+                    <SortTh id="balanceDue" sortKey={invoiceTable.sortKey} sortDir={invoiceTable.sortDir} onSort={invoiceTable.toggleSort} className="text-right">
+                      Balance
+                    </SortTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoiceTable.rows.map((r) => (
                   <tr key={r.id}>
                     <Td mono>{r.number}</Td>
                     <Td>{r.customer ?? "—"}</Td>
@@ -458,6 +489,8 @@ function AgingPanel({
                 ))}
               </tbody>
             </table>
+              <TablePager page={invoiceTable.page} pages={invoiceTable.pages} total={invoiceTable.total} onPage={invoiceTable.setPage} noun="invoices" />
+            </>
           )}
         </Card>
       </div>
@@ -495,34 +528,45 @@ function StatusTable({
   rows: Array<{ status?: string; source?: string; count: number; value?: number }>;
   nameKey?: "status" | "source";
 }) {
+  const table = useClientTable(rows, (r) => `${r.status ?? ""} ${r.source ?? ""} ${r.count}`);
   return (
     <Card className="overflow-hidden">
       <h3 className="px-4 pt-4 text-[14px] font-semibold">{title}</h3>
       {rows.length === 0 ? (
         <Empty title="Nothing to show" />
       ) : (
-        <table className="app-table mt-1 w-full">
-          <thead>
-            <tr>
-              <Th>Status</Th>
-              <Th className="text-right">Count</Th>
-              <Th className="text-right">Value</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={String(r[nameKey] ?? r.status)}>
-                <Td>
-                  <StatusBadge status={String(r[nameKey] ?? r.status ?? "")} />
-                </Td>
-                <Td className="text-right">{r.count}</Td>
-                <Td mono className="text-right">
-                  {inr(r.value)}
-                </Td>
+        <>
+          <div className="px-4 py-2">
+            <TableSearch value={table.search} onChange={table.setSearch} placeholder="Search" />
+          </div>
+          <table className="app-table mt-1 w-full">
+            <thead>
+              <tr>
+                <Th>Status</Th>
+                <SortTh id="count" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} className="text-right">
+                  Count
+                </SortTh>
+                <SortTh id="value" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} className="text-right">
+                  Value
+                </SortTh>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {table.rows.map((r) => (
+                <tr key={String(r[nameKey] ?? r.status)}>
+                  <Td>
+                    <StatusBadge status={String(r[nameKey] ?? r.status ?? "")} />
+                  </Td>
+                  <Td className="text-right">{r.count}</Td>
+                  <Td mono className="text-right">
+                    {inr(r.value)}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <TablePager page={table.page} pages={table.pages} total={table.total} onPage={table.setPage} />
+        </>
       )}
     </Card>
   );
@@ -546,10 +590,11 @@ function ProductionPanel({ data, loading }: { data: Record<string, unknown> | un
 }
 
 function InventoryPanel({ data, loading }: { data: Record<string, unknown> | undefined; loading: boolean }) {
-  if (loading) return <Skeleton className="h-40" />;
   const inv = data ?? {};
   const low = (inv.lowStock as Array<{ id: string; sku: string; name: string; stockQty: number; reorderLevel: number; unit?: string; warehouse?: string }>) ?? [];
   const moves = (inv.movements as Array<{ type: string; qty: number; count: number }>) ?? [];
+  const lowTable = useClientTable(low, (r) => `${r.sku} ${r.name}`);
+  if (loading) return <Skeleton className="h-40" />;
   return (
     <>
       <KpiRow>
@@ -564,17 +609,27 @@ function InventoryPanel({ data, loading }: { data: Record<string, unknown> | und
           {low.length === 0 ? (
             <Empty title="No SKUs at reorder" />
           ) : (
-            <table className="app-table mt-1 w-full">
-              <thead>
-                <tr>
-                  <Th>SKU</Th>
-                  <Th>Name</Th>
-                  <Th className="text-right">Stock</Th>
-                  <Th className="text-right">Reorder</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {low.map((r) => (
+            <>
+              <div className="px-4 py-2">
+                <TableSearch value={lowTable.search} onChange={lowTable.setSearch} placeholder="Search SKUs" />
+              </div>
+              <table className="app-table mt-1 w-full">
+                <thead>
+                  <tr>
+                    <SortTh id="sku" sortKey={lowTable.sortKey} sortDir={lowTable.sortDir} onSort={lowTable.toggleSort}>
+                      SKU
+                    </SortTh>
+                    <SortTh id="name" sortKey={lowTable.sortKey} sortDir={lowTable.sortDir} onSort={lowTable.toggleSort}>
+                      Name
+                    </SortTh>
+                    <SortTh id="stockQty" sortKey={lowTable.sortKey} sortDir={lowTable.sortDir} onSort={lowTable.toggleSort} className="text-right">
+                      Stock
+                    </SortTh>
+                    <Th className="text-right">Reorder</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lowTable.rows.map((r) => (
                   <tr key={r.id}>
                     <Td mono>{r.sku}</Td>
                     <Td>{r.name}</Td>
@@ -586,6 +641,8 @@ function InventoryPanel({ data, loading }: { data: Record<string, unknown> | und
                 ))}
               </tbody>
             </table>
+              <TablePager page={lowTable.page} pages={lowTable.pages} total={lowTable.total} onPage={lowTable.setPage} noun="SKUs" />
+            </>
           )}
         </Card>
         <Card className="p-5">
@@ -630,9 +687,10 @@ function ExpensesPanel({ data, loading }: { data: Record<string, unknown> | unde
 }
 
 function CustomersPanel({ data, loading }: { data: Record<string, unknown> | undefined; loading: boolean }) {
-  if (loading) return <Skeleton className="h-40" />;
   const c = data ?? {};
   const top = (c.topOutstanding as Array<{ id: string; name: string; code?: string; outstanding: number; overdue: number; creditHold?: boolean }>) ?? [];
+  const topTable = useClientTable(top, (r) => `${r.name} ${r.code ?? ""}`);
+  if (loading) return <Skeleton className="h-40" />;
   return (
     <>
       <KpiRow className="xl:grid-cols-4">
@@ -646,17 +704,25 @@ function CustomersPanel({ data, loading }: { data: Record<string, unknown> | und
         {top.length === 0 ? (
           <Empty title="No receivables on customers" />
         ) : (
-          <table className="app-table mt-1 w-full">
-            <thead>
-              <tr>
-                <Th>Customer</Th>
-                <Th className="text-right">Outstanding</Th>
-                <Th className="text-right">Overdue</Th>
-                <Th>Hold</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {top.map((r) => (
+          <>
+            <div className="px-4 py-2">
+              <TableSearch value={topTable.search} onChange={topTable.setSearch} placeholder="Search customers" />
+            </div>
+            <table className="app-table mt-1 w-full">
+              <thead>
+                <tr>
+                  <SortTh id="name" sortKey={topTable.sortKey} sortDir={topTable.sortDir} onSort={topTable.toggleSort}>
+                    Customer
+                  </SortTh>
+                  <SortTh id="outstanding" sortKey={topTable.sortKey} sortDir={topTable.sortDir} onSort={topTable.toggleSort} className="text-right">
+                    Outstanding
+                  </SortTh>
+                  <Th className="text-right">Overdue</Th>
+                  <Th>Hold</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {topTable.rows.map((r) => (
                 <tr key={r.id}>
                   <Td>
                     <div>{r.name}</div>
@@ -673,6 +739,8 @@ function CustomersPanel({ data, loading }: { data: Record<string, unknown> | und
               ))}
             </tbody>
           </table>
+            <TablePager page={topTable.page} pages={topTable.pages} total={topTable.total} onPage={topTable.setPage} noun="customers" />
+          </>
         )}
       </Card>
     </>

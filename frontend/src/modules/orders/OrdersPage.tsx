@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { DocumentSheet } from "@/components/DocumentSheet";
 import { openPdf } from "@/lib/pdf";
 import { Button, Card, Empty, FilterBar, Input, PageHeader, Select, StatusBadge, Td, Th } from "@/components/ui";
-import { SortTh, TablePager, useServerTable } from "@/components/data-table";
+import { SortTh, TablePager, TableSearch, useClientTable, useServerTable } from "@/components/data-table";
 import { fmtDate, inr } from "@/lib/cn";
 import { useState } from "react";
 import { pickWhatsapp, WhatsAppShareModal, type WhatsappShare } from "@/components/WhatsAppShare";
@@ -384,44 +384,12 @@ export function OrderDetailPage() {
           {designItems.length === 0 ? (
             <p className="mt-3 text-sm text-muted">No items on this order require design approval.</p>
           ) : (
-            <table className="mt-3 w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                  <th className="py-1.5">Item</th>
-                  <th className="py-1.5">Status</th>
-                  {canOfflineDesign ? <th className="py-1.5">Offline</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {designItems.map((i: { _id: string; name: string; designStatus?: string; quantity?: number }) => (
-                  <tr key={i._id} className="border-t border-line">
-                    <td className="py-2">
-                      {i.name}
-                      <div className="text-[11px] text-muted">Qty {i.quantity ?? 1}</div>
-                    </td>
-                    <td className="py-2">
-                      <StatusBadge status={String(i.designStatus || "pending")} />
-                    </td>
-                    {canOfflineDesign ? (
-                      <td className="py-2">
-                        <Select
-                          className="h-8 min-w-[9.5rem] text-[12px]"
-                          value={i.designStatus || "pending"}
-                          disabled={designStatusMu.isPending}
-                          onChange={(e) => designStatusMu.mutate({ itemId: i._id, status: e.target.value })}
-                        >
-                          {["pending", "uploaded", "awaiting_approval", "approved", "rejected"].map((s) => (
-                            <option key={s} value={s}>
-                              {s.replaceAll("_", " ")}
-                            </option>
-                          ))}
-                        </Select>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DesignApprovalTable
+              items={designItems}
+              canOffline={canOfflineDesign}
+              pending={designStatusMu.isPending}
+              onStatus={(lineId, status) => designStatusMu.mutate({ itemId: lineId, status })}
+            />
           )}
           {canDesign && (
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -470,6 +438,70 @@ export function OrderDetailPage() {
         </Card>
       </div>
       {waShare && <WhatsAppShareModal share={waShare} title="Share order update on WhatsApp" onClose={() => setWaShare(null)} />}
+    </div>
+  );
+}
+
+function DesignApprovalTable({
+  items,
+  canOffline,
+  pending,
+  onStatus
+}: {
+  items: Array<{ _id: string; name: string; designStatus?: string; quantity?: number }>;
+  canOffline: boolean;
+  pending: boolean;
+  onStatus: (itemId: string, status: string) => void;
+}) {
+  const table = useClientTable(items, (i) => `${i.name} ${i.designStatus ?? ""}`);
+  return (
+    <div className="mt-3 overflow-hidden rounded-lg border border-line">
+      <div className="border-b border-line p-2">
+        <TableSearch value={table.search} onChange={table.setSearch} placeholder="Search items" />
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+            <SortTh id="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+              Item
+            </SortTh>
+            <SortTh id="designStatus" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+              Status
+            </SortTh>
+            {canOffline ? <th className="py-1.5">Offline</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((i) => (
+            <tr key={i._id} className="border-t border-line">
+              <td className="py-2 pl-2">
+                {i.name}
+                <div className="text-[11px] text-muted">Qty {i.quantity ?? 1}</div>
+              </td>
+              <td className="py-2">
+                <StatusBadge status={String(i.designStatus || "pending")} />
+              </td>
+              {canOffline ? (
+                <td className="py-2 pr-2">
+                  <Select
+                    className="h-8 min-w-[9.5rem] text-[12px]"
+                    value={i.designStatus || "pending"}
+                    disabled={pending}
+                    onChange={(e) => onStatus(i._id, e.target.value)}
+                  >
+                    {["pending", "uploaded", "awaiting_approval", "approved", "rejected"].map((s) => (
+                      <option key={s} value={s}>
+                        {s.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </Select>
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TablePager page={table.page} pages={table.pages} total={table.total} onPage={table.setPage} noun="items" />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Button, Input, Label } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/stores/auth";
 import { useTheme } from "@/stores/theme";
+import { APP_NAME, APP_SHORT, APP_TAGLINE } from "@/lib/brand";
 
 const EMAIL_KEY = "infatoz_login_email";
 const SEED_EMAIL = "owner@infatoz.com";
@@ -89,10 +90,10 @@ export function LoginPage() {
       <aside className="relative hidden flex-col justify-between bg-sidebar px-10 py-10 text-white lg:flex">
         <div>
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold tracking-[0.08em]">IP</div>
+            <div className="grid h-11 w-11 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold tracking-[0.08em]">{APP_SHORT.slice(0, 2).toUpperCase()}</div>
             <div>
-              <div className="text-[15px] font-semibold tracking-tight">Infy PrintOS</div>
-              <div className="text-[12px] text-sidebar-text">Printing operations</div>
+              <div className="text-[15px] font-semibold tracking-tight">{APP_NAME}</div>
+              <div className="text-[12px] text-sidebar-text">{APP_TAGLINE}</div>
             </div>
           </div>
           <h1 className="mt-14 max-w-sm text-[28px] font-semibold leading-tight tracking-tight">Staff console for the press floor.</h1>
@@ -117,10 +118,10 @@ export function LoginPage() {
       <main className="relative flex min-h-dvh flex-col px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8">
         <div className="mb-8 flex items-center justify-between gap-3 lg:mb-0 lg:justify-end">
           <div className="flex items-center gap-2.5 lg:hidden">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-sidebar text-[10px] font-semibold tracking-[0.08em] text-white">IP</div>
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-sidebar text-[10px] font-semibold tracking-[0.08em] text-white">{APP_SHORT.slice(0, 2).toUpperCase()}</div>
             <div>
-              <div className="text-[14px] font-semibold leading-none">Infy PrintOS</div>
-              <div className="mt-0.5 text-[11px] text-muted">Printing operations</div>
+              <div className="text-[14px] font-semibold leading-none">{APP_NAME}</div>
+              <div className="mt-0.5 text-[11px] text-muted">{APP_TAGLINE}</div>
             </div>
           </div>
           <button

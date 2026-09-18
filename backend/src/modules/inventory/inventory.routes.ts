@@ -336,12 +336,19 @@ router.get(
     const { user } = req as AuthedRequest;
     const { page, limit, skip, sort } = parsePagination(req);
     const filter: Record<string, unknown> = { organizationId: user.organizationId };
-    if (req.query.type) filter.type = req.query.type;
+    if (req.query.type) {
+      const types = String(req.query.type)
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (types.length === 1) filter.type = types[0];
+      else if (types.length > 1) filter.type = { $in: types };
+    }
     if (req.query.inventoryItemId) filter.inventoryItemId = req.query.inventoryItemId;
     const search = String(req.query.search ?? "").trim();
     if (search) {
       const rx = new RegExp(escapeRegex(search), "i");
-      filter.$or = [{ reason: rx }, { type: rx }];
+      filter.$or = [{ reason: rx }, { type: rx }, { notes: rx }];
     }
     const [rows, total] = await Promise.all([
       InventoryTransaction.find(filter).populate("inventoryItemId", "name sku unit").populate("userId", "name").skip(skip).limit(limit).sort(safeSort(sort, ["createdAt", "quantity", "type"], "-createdAt")),
@@ -356,16 +363,24 @@ router.get(
   requirePermission("inventory.view"),
   asyncHandler(async (req, res) => {
     const { user } = req as AuthedRequest;
-    const { page, limit, skip } = parsePagination(req);
+    const { page, limit, skip, search, sort } = parsePagination(req);
     const item = await InventoryItem.findOne({
       _id: paramId(req.params.itemId),
       organizationId: user.organizationId,
       deletedAt: null
     });
     if (!item) throw ApiError.notFound("Inventory item not found");
-    const filter = { organizationId: user.organizationId, inventoryItemId: item._id };
+    const filter: Record<string, unknown> = { organizationId: user.organizationId, inventoryItemId: item._id };
+    if (search) {
+      const rx = new RegExp(escapeRegex(search), "i");
+      filter.$or = [{ reason: rx }, { type: rx }, { notes: rx }];
+    }
     const [rows, total] = await Promise.all([
-      InventoryTransaction.find(filter).populate("userId", "name").skip(skip).limit(limit).sort("-createdAt"),
+      InventoryTransaction.find(filter)
+        .populate("userId", "name")
+        .skip(skip)
+        .limit(limit)
+        .sort(safeSort(sort, ["createdAt", "quantity", "type"], "-createdAt")),
       InventoryTransaction.countDocuments(filter)
     ]);
     return paginated(res, rows, { page, limit, total });

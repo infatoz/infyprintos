@@ -660,26 +660,7 @@ export function ProductionPage() {
               {(selected.materials ?? []).length > 0 && (
                 <div>
                   <h4 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Bill of materials</h4>
-                  <Card className="overflow-hidden">
-                    <table className="app-table w-full">
-                      <thead>
-                        <tr>
-                          <Th>Item</Th>
-                          <Th className="text-right">Qty</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(selected.materials ?? []).map((m, i) => (
-                          <tr key={m.inventoryItemId ?? String(i)}>
-                            <Td>{m.name ?? "Material"}</Td>
-                            <Td mono className="text-right">
-                              {m.quantity ?? 0} {m.unit ?? ""}
-                            </Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </Card>
+                  <BomTable rows={selected.materials ?? []} />
                 </div>
               )}
               {(selected.events ?? []).length > 0 && (
@@ -821,5 +802,39 @@ export function ProductionPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function BomTable({ rows }: { rows: Material[] }) {
+  const table = useClientTable(rows, (m) => `${m.name ?? ""} ${m.unit ?? ""} ${m.quantity ?? ""}`);
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-line p-2">
+        <TableSearch value={table.search} onChange={table.setSearch} placeholder="Search materials" />
+      </div>
+      <table className="app-table w-full">
+        <thead>
+          <tr>
+            <SortTh id="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+              Item
+            </SortTh>
+            <SortTh id="quantity" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} className="text-right">
+              Qty
+            </SortTh>
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((m, i) => (
+            <tr key={m.inventoryItemId ?? String(i)}>
+              <Td>{m.name ?? "Material"}</Td>
+              <Td mono className="text-right">
+                {m.quantity ?? 0} {m.unit ?? ""}
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TablePager page={table.page} pages={table.pages} total={table.total} onPage={table.setPage} noun="materials" />
+    </Card>
   );
 }

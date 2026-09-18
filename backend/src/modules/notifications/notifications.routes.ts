@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../common/asyncHandler";
-import { ok, created } from "../../common/response";
+import { ok, created, paginated } from "../../common/response";
+import { parsePagination, escapeRegex, safeSort } from "../../common/pagination";
 import { NotificationTemplate, NotificationLog } from "../../models/Settings";
 import { ensureDefaultTemplates, queueNotification, shareFromLog } from "../../common/notify";
 import { authenticate, type AuthedRequest } from "../../middleware/auth";
@@ -68,13 +69,25 @@ router.get(
   shareRead,
   asyncHandler(async (req, res) => {
     const { user } = req as AuthedRequest;
+    const { page, limit, skip, search, sort } = parsePagination(req);
     const filter: Record<string, unknown> = { organizationId: user.organizationId };
     if (req.query.referenceType) filter.referenceType = req.query.referenceType;
     if (req.query.referenceId) filter.referenceId = req.query.referenceId;
-    const logs = await NotificationLog.find(filter).sort("-createdAt").limit(100);
-    return ok(
+    if (search) {
+      const rx = new RegExp(escapeRegex(search), "i");
+      filter.$or = [{ event: rx }, { to: rx }, { body: rx }, { status: rx }];
+    }
+    const [logs, total] = await Promise.all([
+      NotificationLog.find(filter)
+        .sort(safeSort(sort, ["createdAt", "event", "status", "to"], "-createdAt"))
+        .skip(skip)
+        .limit(limit),
+      NotificationLog.countDocuments(filter)
+    ]);
+    return paginated(
       res,
-      logs.map((log) => ({ ...log.toObject(), whatsapp: shareFromLog(log) }))
+      logs.map((log) => ({ ...log.toObject(), whatsapp: shareFromLog(log) })),
+      { page, limit, total }
     );
   })
 );

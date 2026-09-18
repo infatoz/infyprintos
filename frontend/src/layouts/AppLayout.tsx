@@ -25,6 +25,7 @@ import { useTheme } from "@/stores/theme";
 import { can } from "@/lib/access";
 import { cn, initials } from "@/lib/cn";
 import { CommandPalette } from "@/components/CommandPalette";
+import { APP_NAME, APP_SHORT, APP_TAGLINE } from "@/lib/brand";
 
 const GROUPS = [
   {
@@ -102,7 +103,7 @@ export function AppLayout() {
   const items = groups.flatMap((g) => g.items);
   const mobilePrimary = items.slice(0, 4);
   const mobileMore = items.slice(4);
-  const orgName = user?.organization?.name || "Infy PrintOS";
+  const orgName = user?.organization?.name || APP_NAME;
   const branchName = user?.branch?.code || user?.branch?.name;
 
   function toggleSidebar() {
@@ -164,11 +165,11 @@ export function AppLayout() {
         )}
       >
         <div className={cn("flex items-center py-4", collapsed ? "flex-col gap-2 px-2" : "gap-3 px-3")}>
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold tracking-wide text-white">IN</div>
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-semibold tracking-wide text-white">{APP_SHORT.slice(0, 2).toUpperCase()}</div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-[14px] font-semibold text-white">{orgName}</div>
-              <div className="truncate text-[11px] text-sidebar-text/70">{branchName ? `${branchName} branch` : "Printing ERP"}</div>
+              <div className="truncate text-[11px] text-sidebar-text/70">{branchName ? `${branchName} branch` : APP_TAGLINE}</div>
             </div>
           )}
           <button
@@ -254,7 +255,7 @@ export function AppLayout() {
             {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>
           <div className="flex items-center gap-2 lg:hidden">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-sidebar text-[10px] font-semibold text-white">IN</div>
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-sidebar text-[10px] font-semibold text-white">{APP_SHORT.slice(0, 2).toUpperCase()}</div>
             <span className="max-w-[40vw] truncate text-[13px] font-semibold">{orgName}</span>
           </div>
           <button

@@ -1,10 +1,10 @@
-# Infatoz Printing ERP — Architecture
+# Infy PrintOS — Architecture
 
 Status: living document. Describes the **current modular monolith** and the target enterprise SaaS shape. Working modules are not rewritten unless a gap is production-blocking.
 
 ## 1. System context
 
-Infatoz is a printing-press ERP: CRM → quotation → customer approval → order → artwork approval → production → material consumption → dispatch → invoice → payment → reports.
+Infy PrintOS is a printing-press operations platform: CRM → quotation → customer approval → order → artwork approval → production → material consumption → dispatch → invoice → payment → reports.
 
 ```
 Staff browsers / future Flutter apps

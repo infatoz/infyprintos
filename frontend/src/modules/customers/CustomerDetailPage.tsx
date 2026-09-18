@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
-import { Avatar, Badge, Button, Card, Empty, ErrorState, Field, Input, PageHeader, SearchableSelect, Skeleton, Tabs, Textarea } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Empty, ErrorState, Field, Input, PageHeader, SearchableSelect, Skeleton, Tabs, Td, Textarea } from "@/components/ui";
 import { fmtDate, inr } from "@/lib/cn";
 import { useAuth } from "@/stores/auth";
 import { can } from "@/lib/access";
+import { SortTh, TablePager, TableSearch, useClientTable } from "@/components/data-table";
 import { CustomerForm, customerToForm, type CustomerFormExtras } from "./CustomerForm";
 import { pickWhatsapp, WhatsAppShareModal, type WhatsappShare } from "@/components/WhatsAppShare";
 
@@ -673,17 +674,17 @@ export function CustomerDetailPage({ id }: { id: string }) {
                 </div>
               ))}
             </div>
-            <ul className="mt-4 space-y-2 text-sm">
-              {(statement.data?.openInvoices ?? []).map((inv: { id: string; number: string; status: string; balanceDue: number; bucket: string }) => (
-                <li key={inv.id} className="flex justify-between rounded-xl bg-paper px-3 py-2">
-                  <span>
-                    {inv.number} · {inv.status} · {inv.bucket.replace("_", " ")}
-                  </span>
-                  <span className="font-mono">{inr(inv.balanceDue)}</span>
-                </li>
-              ))}
-            </ul>
-            {!statement.data?.openInvoices?.length && <Empty title="No open invoices" />}
+            <HistoryTable
+              title="Open invoices"
+              empty="No open invoices"
+              rows={(statement.data?.openInvoices ?? []).map((inv: { id: string; number: string; status: string; balanceDue: number; bucket: string }) => ({
+                id: inv.id,
+                title: inv.number,
+                meta: `${inv.status} · ${inv.bucket.replace("_", " ")}`,
+                value: inr(inv.balanceDue),
+                when: inv.bucket.replace("_", " ")
+              }))}
+            />
           </Card>
         </div>
       )}
@@ -762,30 +763,53 @@ function HistoryTable({
   empty: string;
   rows: Array<{ id: string; href?: string; title: string; meta: string; value: string; when: string }>;
 }) {
+  const table = useClientTable(rows, (r) => `${r.title} ${r.meta} ${r.value} ${r.when}`);
   return (
     <Card className="overflow-hidden">
-      {title && <h3 className="px-4 pt-4 font-bold">{title}</h3>}
-      {!rows.length && <Empty title={empty} />}
-      <ul>
-        {rows.map((row) => {
-          const inner = (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-              <div>
-                <div className="font-semibold">{row.title}</div>
-                <div className="text-xs capitalize text-ink/45">
-                  {row.meta} · {row.when}
-                </div>
-              </div>
-              <div className="font-mono">{row.value}</div>
-            </div>
-          );
-          return (
-            <li key={row.id} className="border-t border-ink/5 first:border-t-0">
-              {row.href ? <Link to={row.href}>{inner}</Link> : inner}
-            </li>
-          );
-        })}
-      </ul>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        {title ? <h3 className="font-bold">{title}</h3> : <span />}
+        <TableSearch value={table.search} onChange={table.setSearch} placeholder="Search" className="max-w-xs" />
+      </div>
+      {table.empty && <Empty title={empty} />}
+      <table className="app-table w-full">
+        <thead>
+          <tr>
+            <SortTh id="title" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+              Number
+            </SortTh>
+            <SortTh id="meta" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+              Status
+            </SortTh>
+            <SortTh id="when" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort}>
+              When
+            </SortTh>
+            <SortTh id="value" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} className="text-right">
+              Amount
+            </SortTh>
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row) => (
+            <tr key={row.id} className="hover:bg-paper/80">
+              <Td>
+                {row.href ? (
+                  <Link to={row.href} className="font-medium hover:underline">
+                    {row.title}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{row.title}</span>
+                )}
+              </Td>
+              <Td className="capitalize">{row.meta}</Td>
+              <Td>{row.when}</Td>
+              <Td mono className="text-right">
+                {row.value}
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TablePager page={table.page} pages={table.pages} total={table.total} onPage={table.setPage} />
     </Card>
   );
 }

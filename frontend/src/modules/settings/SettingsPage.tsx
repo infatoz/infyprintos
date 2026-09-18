@@ -494,17 +494,22 @@ function NotificationsPanel({
   onTemplatesChanged: () => void;
 }) {
   const [waShare, setWaShare] = useState<WhatsappShare | null>(null);
+  const logTable = useServerTable({ limit: 20, sort: "-createdAt" });
   const logs = useQuery({
-    queryKey: ["notify-logs"],
-    queryFn: async () => (await api.get("/notifications/logs")).data.data as Array<{
-      _id: string;
-      event: string;
-      to: string;
-      body: string;
-      status: string;
-      createdAt: string;
-      whatsapp?: WhatsappShare;
-    }>
+    queryKey: ["notify-logs", logTable.params],
+    queryFn: async () =>
+      (await api.get("/notifications/logs", { params: logTable.params })).data as {
+        data: Array<{
+          _id: string;
+          event: string;
+          to: string;
+          body: string;
+          status: string;
+          createdAt: string;
+          whatsapp?: WhatsappShare;
+        }>;
+        meta?: { page: number; pages: number; total: number };
+      }
   });
 
   return (
@@ -516,21 +521,28 @@ function NotificationsPanel({
       </Card>
       <TemplatesPanel rows={templates} onChanged={onTemplatesChanged} />
       <Card className="overflow-hidden">
-        <div className="border-b border-line px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
           <h3 className="text-[14px] font-semibold">Recent shares</h3>
+          <TableSearch value={logTable.search} onChange={logTable.setSearch} placeholder="Search event or number" className="max-w-xs" />
         </div>
         <table className="app-table w-full">
           <thead>
             <tr>
-              <Th>When</Th>
-              <Th>Event</Th>
+              <SortTh id="createdAt" serverSort={logTable.sort} onSort={logTable.toggleSort}>
+                When
+              </SortTh>
+              <SortTh id="event" serverSort={logTable.sort} onSort={logTable.toggleSort}>
+                Event
+              </SortTh>
               <Th>To</Th>
-              <Th>Status</Th>
+              <SortTh id="status" serverSort={logTable.sort} onSort={logTable.toggleSort}>
+                Status
+              </SortTh>
               <Th />
             </tr>
           </thead>
           <tbody>
-            {(logs.data ?? []).map((row) => (
+            {(logs.data?.data ?? []).map((row) => (
               <tr key={row._id}>
                 <Td>{fmtDate(row.createdAt)}</Td>
                 <Td className="capitalize">{row.event.replaceAll("_", " ")}</Td>
@@ -553,7 +565,16 @@ function NotificationsPanel({
             ))}
           </tbody>
         </table>
-        {!(logs.data ?? []).length && <Empty title="No shares yet" hint="Create an order or send a quotation, then share from the prompt." />}
+        {!(logs.data?.data ?? []).length && <Empty title="No shares yet" hint="Create an order or send a quotation, then share from the prompt." />}
+        <TablePager
+          page={logs.data?.meta?.page ?? 1}
+          pages={logs.data?.meta?.pages ?? 1}
+          total={logs.data?.meta?.total ?? 0}
+          onPage={logTable.setPage}
+          pageSize={logTable.limit}
+          onPageSize={logTable.setLimit}
+          noun="shares"
+        />
       </Card>
       {waShare && <WhatsAppShareModal share={waShare} title="Share on WhatsApp" onClose={() => setWaShare(null)} />}
     </div>

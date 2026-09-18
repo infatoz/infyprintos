@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
 import { Card, Empty, ErrorState, Kpi, KpiRow, PageHeader, Skeleton, StatusBadge, Td, Th } from "@/components/ui";
+import { SortTh, TablePager, TableSearch, useClientTable } from "@/components/data-table";
 import { inr } from "@/lib/cn";
 import { useAuth } from "@/stores/auth";
 import { can } from "@/lib/access";
@@ -39,6 +40,10 @@ export function DashboardPage() {
   });
 
   const d = dash.data ?? {};
+  const topCustomers = (d.top?.customers ?? []) as TopCustomer[];
+  const topItems = (d.top?.items ?? []) as TopItem[];
+  const customerTable = useClientTable(topCustomers, (c) => `${c.customer?.name ?? ""} ${c.customer?.code ?? ""}`);
+  const itemTable = useClientTable(topItems, (c) => `${c._id} ${c.sku ?? ""}`);
 
   function applyPreset(next: ReportPreset) {
     const r = rangeFromPreset(next);
@@ -260,60 +265,84 @@ export function DashboardPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <Card className="overflow-hidden">
             <h3 className="px-4 pt-4 text-[14px] font-semibold">Top customers</h3>
-            {(d.top?.customers ?? []).length === 0 && <Empty title="No customer sales yet" hint="Confirmed orders will appear here." />}
-            {(d.top?.customers ?? []).length > 0 && (
-              <table className="app-table mt-1 w-full">
-                <thead>
-                  <tr>
-                    <Th>Customer</Th>
-                    <Th>Orders</Th>
-                    <Th className="text-right">Value</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(d.top?.customers ?? []).map((c: TopCustomer) => (
-                    <tr key={c._id}>
-                      <Td>
-                        <div>{c.customer?.name}</div>
-                        {c.customer?.code ? <div className="text-[11px] text-muted">{c.customer.code}</div> : null}
-                      </Td>
-                      <Td>{c.orders}</Td>
-                      <Td mono className="text-right">
-                        {inr(c.total)}
-                      </Td>
+            {topCustomers.length === 0 && <Empty title="No customer sales yet" hint="Confirmed orders will appear here." />}
+            {topCustomers.length > 0 && (
+              <>
+                <div className="px-4 py-2">
+                  <TableSearch value={customerTable.search} onChange={customerTable.setSearch} placeholder="Search customers" />
+                </div>
+                <table className="app-table mt-1 w-full">
+                  <thead>
+                    <tr>
+                      <SortTh id="customer.name" sortKey={customerTable.sortKey} sortDir={customerTable.sortDir} onSort={customerTable.toggleSort}>
+                        Customer
+                      </SortTh>
+                      <SortTh id="orders" sortKey={customerTable.sortKey} sortDir={customerTable.sortDir} onSort={customerTable.toggleSort}>
+                        Orders
+                      </SortTh>
+                      <SortTh id="total" sortKey={customerTable.sortKey} sortDir={customerTable.sortDir} onSort={customerTable.toggleSort} className="text-right">
+                        Value
+                      </SortTh>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {customerTable.rows.map((c) => (
+                      <tr key={c._id}>
+                        <Td>
+                          <div>{c.customer?.name}</div>
+                          {c.customer?.code ? <div className="text-[11px] text-muted">{c.customer.code}</div> : null}
+                        </Td>
+                        <Td>{c.orders}</Td>
+                        <Td mono className="text-right">
+                          {inr(c.total)}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <TablePager page={customerTable.page} pages={customerTable.pages} total={customerTable.total} onPage={customerTable.setPage} noun="customers" />
+              </>
             )}
           </Card>
           <Card className="overflow-hidden">
             <h3 className="px-4 pt-4 text-[14px] font-semibold">Top items</h3>
-            {(d.top?.items ?? []).length === 0 && <Empty title="No item sales yet" hint="Catalog items from orders will rank here." />}
-            {(d.top?.items ?? []).length > 0 && (
-              <table className="app-table mt-1 w-full">
-                <thead>
-                  <tr>
-                    <Th>Item</Th>
-                    <Th>Qty</Th>
-                    <Th className="text-right">Value</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(d.top?.items ?? []).map((c: TopItem) => (
-                    <tr key={c._id}>
-                      <Td>
-                        {c._id}
-                        {c.sku ? <span className="ml-2 text-[11px] text-muted">{c.sku}</span> : null}
-                      </Td>
-                      <Td>{c.qty}</Td>
-                      <Td mono className="text-right">
-                        {inr(c.total)}
-                      </Td>
+            {topItems.length === 0 && <Empty title="No item sales yet" hint="Catalog items from orders will rank here." />}
+            {topItems.length > 0 && (
+              <>
+                <div className="px-4 py-2">
+                  <TableSearch value={itemTable.search} onChange={itemTable.setSearch} placeholder="Search items" />
+                </div>
+                <table className="app-table mt-1 w-full">
+                  <thead>
+                    <tr>
+                      <SortTh id="_id" sortKey={itemTable.sortKey} sortDir={itemTable.sortDir} onSort={itemTable.toggleSort}>
+                        Item
+                      </SortTh>
+                      <SortTh id="qty" sortKey={itemTable.sortKey} sortDir={itemTable.sortDir} onSort={itemTable.toggleSort}>
+                        Qty
+                      </SortTh>
+                      <SortTh id="total" sortKey={itemTable.sortKey} sortDir={itemTable.sortDir} onSort={itemTable.toggleSort} className="text-right">
+                        Value
+                      </SortTh>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {itemTable.rows.map((c) => (
+                      <tr key={c._id}>
+                        <Td>
+                          {c._id}
+                          {c.sku ? <span className="ml-2 text-[11px] text-muted">{c.sku}</span> : null}
+                        </Td>
+                        <Td>{c.qty}</Td>
+                        <Td mono className="text-right">
+                          {inr(c.total)}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <TablePager page={itemTable.page} pages={itemTable.pages} total={itemTable.total} onPage={itemTable.setPage} noun="items" />
+              </>
             )}
           </Card>
         </div>

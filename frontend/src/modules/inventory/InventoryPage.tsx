@@ -21,7 +21,7 @@ import {
   Textarea,
   Th
 } from "@/components/ui";
-import { SortTh, TablePager, useServerTable } from "@/components/data-table";
+import { SortTh, TablePager, TableSearch, useClientTable, useServerTable } from "@/components/data-table";
 import { fmtDate, inr } from "@/lib/cn";
 import { can } from "@/lib/access";
 import { useAuth } from "@/stores/auth";
@@ -116,6 +116,9 @@ export function InventoryPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<(typeof TABS)[number]>("stock");
   const stockTable = useServerTable({ limit: 20, sort: "name" });
+  const ledgerTable = useServerTable({ limit: 20, sort: "-createdAt" });
+  const wasteTable = useServerTable({ limit: 20, sort: "-createdAt" });
+  const [wasteKind, setWasteKind] = useState("");
   const [type, setType] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -154,19 +157,33 @@ export function InventoryPage() {
     queryFn: async () => (await api.get("/inventory/usage", { params: { period: usagePeriod } })).data.data
   });
   const ledger = useQuery({
-    queryKey: ["inv-led", selected],
+    queryKey: ["inv-led", selected, ledgerTable.params],
     enabled: Boolean(selected),
-    queryFn: async () => (await api.get(`/inventory/ledger/${selected}`, { params: { limit: 50 } })).data.data
+    queryFn: async () =>
+      (await api.get(`/inventory/ledger/${selected}`, { params: ledgerTable.params })).data as {
+        data: Array<{ _id: string; createdAt: string; type: string; quantity: number; unitCost?: number; newBalance?: number; reason?: string }>;
+        meta?: { page: number; pages: number; total: number };
+      }
   });
   const wasteRows = useQuery({
-    queryKey: ["inv-waste"],
+    queryKey: ["inv-waste", wasteKind, wasteTable.params],
     enabled: tab === "waste",
-    queryFn: async () => (await api.get("/inventory/transactions", { params: { type: "wastage", limit: 50 } })).data.data
-  });
-  const damagedRows = useQuery({
-    queryKey: ["inv-damaged"],
-    enabled: tab === "waste",
-    queryFn: async () => (await api.get("/inventory/transactions", { params: { type: "damaged", limit: 50 } })).data.data
+    queryFn: async () =>
+      (
+        await api.get("/inventory/transactions", {
+          params: { ...wasteTable.params, type: wasteKind || "wastage,damaged" }
+        })
+      ).data as {
+        data: Array<{
+          _id: string;
+          createdAt: string;
+          type: string;
+          quantity: number;
+          reason?: string;
+          inventoryItemId?: { name?: string; sku?: string; unit?: string };
+        }>;
+        meta?: { page: number; pages: number; total: number };
+      }
   });
 
   const [move, setMove] = useState({
@@ -189,7 +206,6 @@ export function InventoryPage() {
     qc.invalidateQueries({ queryKey: ["inv-led"] });
     qc.invalidateQueries({ queryKey: ["inv-usage"] });
     qc.invalidateQueries({ queryKey: ["inv-waste"] });
-    qc.invalidateQueries({ queryKey: ["inv-damaged"] });
   }
 
   const postMove = useMutation({
@@ -247,6 +263,11 @@ export function InventoryPage() {
     [items.data]
   );
   const selectedItem = (items.data?.data ?? []).find((i) => i._id === selected);
+  const typeTable = useClientTable(types.data, (r) => `${r.name} ${r.slug} ${r.description ?? ""} ${r.defaultUnit ?? ""}`);
+  const catTable = useClientTable(categories.data, (r) => `${r.name} ${r.type} ${r.description ?? ""}`);
+  const supplierTable = useClientTable(suppliers.data, (r) => `${r.name} ${r.code ?? ""} ${r.phone ?? ""} ${r.gstin ?? ""} ${r.city ?? ""}`);
+  const unitTable = useClientTable(units.data, (r) => `${r.code} ${r.name}`);
+  const usageTable = useClientTable((usage.data?.rows ?? []) as UsageRow[], (r) => `${r.name ?? ""} ${r.sku ?? ""}`);
 
   return (
     <div>
@@ -430,8 +451,17 @@ export function InventoryPage() {
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 p-3">
             <div className="min-w-[220px] flex-1">
-              <SearchableSelect value={selected} onChange={setSelected} options={itemOptions} placeholder="Select SKU" />
+              <SearchableSelect
+                value={selected}
+                onChange={(v) => {
+                  setSelected(v);
+                  ledgerTable.setPage(1);
+                }}
+                options={itemOptions}
+                placeholder="Select SKU"
+              />
             </div>
+            <TableSearch value={ledgerTable.search} onChange={ledgerTable.setSearch} placeholder="Search type or reason" className="max-w-xs" />
             {selectedItem && canAdjust && (
               <Button variant="secondary" onClick={() => setItemModal({ open: true, id: selectedItem._id })}>
                 Edit SKU
@@ -457,16 +487,22 @@ export function InventoryPage() {
           <table className="app-table w-full">
             <thead>
               <tr>
-                <Th>When</Th>
-                <Th>Type</Th>
-                <Th>Qty</Th>
+                <SortTh id="createdAt" serverSort={ledgerTable.sort} onSort={ledgerTable.toggleSort}>
+                  When
+                </SortTh>
+                <SortTh id="type" serverSort={ledgerTable.sort} onSort={ledgerTable.toggleSort}>
+                  Type
+                </SortTh>
+                <SortTh id="quantity" serverSort={ledgerTable.sort} onSort={ledgerTable.toggleSort}>
+                  Qty
+                </SortTh>
                 <Th>Cost</Th>
                 <Th>Balance</Th>
                 <Th>Reason</Th>
               </tr>
             </thead>
             <tbody>
-              {(ledger.data ?? []).map((row: { _id: string; createdAt: string; type: string; quantity: number; unitCost?: number; newBalance?: number; reason?: string }) => (
+              {(ledger.data?.data ?? []).map((row) => (
                 <tr key={row._id}>
                   <Td>{fmtDate(row.createdAt)}</Td>
                   <Td>
@@ -481,53 +517,82 @@ export function InventoryPage() {
             </tbody>
           </table>
           {!selected && <Empty title="Select a SKU to view its ledger" />}
+          {selected && !(ledger.data?.data ?? []).length && <Empty title="No ledger rows" />}
+          <TablePager
+            page={ledger.data?.meta?.page ?? 1}
+            pages={ledger.data?.meta?.pages ?? 1}
+            total={ledger.data?.meta?.total ?? 0}
+            onPage={ledgerTable.setPage}
+            pageSize={ledgerTable.limit}
+            onPageSize={ledgerTable.setLimit}
+            noun="rows"
+          />
         </Card>
       )}
 
       {tab === "waste" && (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="overflow-hidden lg:col-span-2">
+            <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
+              <TableSearch value={wasteTable.search} onChange={wasteTable.setSearch} placeholder="Search reason" className="min-w-[160px] flex-1" />
+              <SearchableSelect
+                value={wasteKind}
+                onChange={(v) => {
+                  setWasteKind(v);
+                  wasteTable.setPage(1);
+                }}
+                emptyLabel="All waste"
+                options={[
+                  { value: "wastage", label: "Process waste" },
+                  { value: "damaged", label: "Damaged" }
+                ]}
+              />
+            </div>
             <table className="app-table w-full">
               <thead>
                 <tr>
-                  <Th>When</Th>
+                  <SortTh id="createdAt" serverSort={wasteTable.sort} onSort={wasteTable.toggleSort}>
+                    When
+                  </SortTh>
                   <Th>SKU</Th>
-                  <Th>Kind</Th>
-                  <Th>Qty</Th>
+                  <SortTh id="type" serverSort={wasteTable.sort} onSort={wasteTable.toggleSort}>
+                    Kind
+                  </SortTh>
+                  <SortTh id="quantity" serverSort={wasteTable.sort} onSort={wasteTable.toggleSort}>
+                    Qty
+                  </SortTh>
                   <Th>Reason</Th>
                 </tr>
               </thead>
               <tbody>
-                {[...(wasteRows.data ?? []), ...(damagedRows.data ?? [])]
-                  .sort((a: { createdAt: string }, b: { createdAt: string }) => +new Date(b.createdAt) - +new Date(a.createdAt))
-                  .map(
-                    (row: {
-                      _id: string;
-                      createdAt: string;
-                      type: string;
-                      quantity: number;
-                      reason?: string;
-                      inventoryItemId?: { name?: string; sku?: string; unit?: string };
-                    }) => (
-                      <tr key={row._id}>
-                        <Td>{fmtDate(row.createdAt)}</Td>
-                        <Td>
-                          {row.inventoryItemId?.name}
-                          <div className="font-mono text-[12px] text-muted">{row.inventoryItemId?.sku}</div>
-                        </Td>
-                        <Td>
-                          <StatusBadge status={row.type} />
-                        </Td>
-                        <Td mono>
-                          {Math.abs(row.quantity)} {row.inventoryItemId?.unit}
-                        </Td>
-                        <Td className="text-muted">{row.reason || "—"}</Td>
-                      </tr>
-                    )
-                  )}
+                {(wasteRows.data?.data ?? []).map((row) => (
+                  <tr key={row._id}>
+                    <Td>{fmtDate(row.createdAt)}</Td>
+                    <Td>
+                      {row.inventoryItemId?.name}
+                      <div className="font-mono text-[12px] text-muted">{row.inventoryItemId?.sku}</div>
+                    </Td>
+                    <Td>
+                      <StatusBadge status={row.type} />
+                    </Td>
+                    <Td mono>
+                      {Math.abs(row.quantity)} {row.inventoryItemId?.unit}
+                    </Td>
+                    <Td className="text-muted">{row.reason || "—"}</Td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-            {!wasteRows.data?.length && !damagedRows.data?.length && <Empty title="No waste posted" hint="Record spoilage, trim and damaged media with a reason." />}
+            {!(wasteRows.data?.data ?? []).length && <Empty title="No waste posted" hint="Record spoilage, trim and damaged media with a reason." />}
+            <TablePager
+              page={wasteRows.data?.meta?.page ?? 1}
+              pages={wasteRows.data?.meta?.pages ?? 1}
+              total={wasteRows.data?.meta?.total ?? 0}
+              onPage={wasteTable.setPage}
+              pageSize={wasteTable.limit}
+              onPageSize={wasteTable.setLimit}
+              noun="rows"
+            />
           </Card>
           {canAdjust && (
             <Card className="p-5">
@@ -568,16 +633,19 @@ export function InventoryPage() {
               <h3 className="text-[15px] font-semibold">Consumption vs waste</h3>
               <p className="text-[13px] text-muted">Production issues, manual issues, wastage and damage.</p>
             </div>
-            <div className="w-40">
-              <SearchableSelect
-                value={usagePeriod}
-                onChange={setUsagePeriod}
-                options={[
-                  { value: "daily", label: "Last day" },
-                  { value: "weekly", label: "Last 7 days" },
-                  { value: "monthly", label: "Last 30 days" }
-                ]}
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <TableSearch value={usageTable.search} onChange={usageTable.setSearch} placeholder="Search SKU" className="w-40" />
+              <div className="w-40">
+                <SearchableSelect
+                  value={usagePeriod}
+                  onChange={setUsagePeriod}
+                  options={[
+                    { value: "daily", label: "Last day" },
+                    { value: "weekly", label: "Last 7 days" },
+                    { value: "monthly", label: "Last 30 days" }
+                  ]}
+                />
+              </div>
             </div>
           </div>
           <div className="grid gap-2 border-t border-line px-4 py-3 text-[13px] sm:grid-cols-4">
@@ -597,15 +665,25 @@ export function InventoryPage() {
           <table className="app-table w-full">
             <thead>
               <tr>
-                <Th>Item</Th>
-                <Th>Issued</Th>
-                <Th>Waste</Th>
-                <Th>Damaged</Th>
-                <Th>Cost</Th>
+                <SortTh id="name" sortKey={usageTable.sortKey} sortDir={usageTable.sortDir} onSort={usageTable.toggleSort}>
+                  Item
+                </SortTh>
+                <SortTh id="consumption" sortKey={usageTable.sortKey} sortDir={usageTable.sortDir} onSort={usageTable.toggleSort}>
+                  Issued
+                </SortTh>
+                <SortTh id="wastage" sortKey={usageTable.sortKey} sortDir={usageTable.sortDir} onSort={usageTable.toggleSort}>
+                  Waste
+                </SortTh>
+                <SortTh id="damaged" sortKey={usageTable.sortKey} sortDir={usageTable.sortDir} onSort={usageTable.toggleSort}>
+                  Damaged
+                </SortTh>
+                <SortTh id="cost" sortKey={usageTable.sortKey} sortDir={usageTable.sortDir} onSort={usageTable.toggleSort}>
+                  Cost
+                </SortTh>
               </tr>
             </thead>
             <tbody>
-              {(usage.data?.rows ?? []).map((r: UsageRow) => (
+              {usageTable.rows.map((r) => (
                 <tr key={r.inventoryItemId}>
                   <Td>
                     {r.name} <span className="font-mono text-[12px] text-muted">{r.sku}</span>
@@ -620,12 +698,14 @@ export function InventoryPage() {
               ))}
             </tbody>
           </table>
-          {!usage.data?.rows?.length && <Empty title="No consumption in this period" />}
+          {usageTable.empty && <Empty title="No consumption in this period" />}
+          <TablePager page={usageTable.page} pages={usageTable.pages} total={usageTable.total} onPage={usageTable.setPage} noun="SKUs" />
         </Card>
       )}
 
       {tab === "types" && (
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <TableSearch value={typeTable.search} onChange={typeTable.setSearch} placeholder="Search types" className="max-w-xs" />
           {canAdjust && <Button onClick={() => setTypeModal({ open: true })}>New type</Button>}
         </div>
       )}
@@ -634,14 +714,16 @@ export function InventoryPage() {
           <table className="app-table w-full">
             <thead>
               <tr>
-                <Th>Type</Th>
+                <SortTh id="name" sortKey={typeTable.sortKey} sortDir={typeTable.sortDir} onSort={typeTable.toggleSort}>
+                  Type
+                </SortTh>
                 <Th>Default unit</Th>
                 <Th>Status</Th>
                 {canAdjust && <Th />}
               </tr>
             </thead>
             <tbody>
-              {(types.data ?? []).map((row) => (
+              {typeTable.rows.map((row) => (
                 <tr key={row._id} className={canAdjust ? "cursor-pointer hover:bg-paper/80" : ""} onClick={() => canAdjust && setTypeModal({ open: true, id: row._id })}>
                   <Td>
                     <div className="font-medium">{row.name}</div>
@@ -678,26 +760,33 @@ export function InventoryPage() {
               ))}
             </tbody>
           </table>
+          {typeTable.empty && <Empty title="No types" />}
+          <TablePager page={typeTable.page} pages={typeTable.pages} total={typeTable.total} onPage={typeTable.setPage} noun="types" />
         </Card>
       )}
 
       {tab === "categories" && (
         <>
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <TableSearch value={catTable.search} onChange={catTable.setSearch} placeholder="Search categories" className="max-w-xs" />
             {canAdjust && <Button onClick={() => setCatModal({ open: true })}>New category</Button>}
           </div>
           <Card className="overflow-hidden">
             <table className="app-table w-full">
               <thead>
                 <tr>
-                  <Th>Category</Th>
-                  <Th>Type</Th>
+                  <SortTh id="name" sortKey={catTable.sortKey} sortDir={catTable.sortDir} onSort={catTable.toggleSort}>
+                    Category
+                  </SortTh>
+                  <SortTh id="type" sortKey={catTable.sortKey} sortDir={catTable.sortDir} onSort={catTable.toggleSort}>
+                    Type
+                  </SortTh>
                   <Th>Status</Th>
                   {canAdjust && <Th />}
                 </tr>
               </thead>
               <tbody>
-                {(categories.data ?? []).map((row) => (
+                {catTable.rows.map((row) => (
                   <tr key={row._id} className={canAdjust ? "cursor-pointer hover:bg-paper/80" : ""} onClick={() => canAdjust && setCatModal({ open: true, id: row._id })}>
                     <Td>
                       <div className="font-medium">{row.name}</div>
@@ -731,28 +820,32 @@ export function InventoryPage() {
                 ))}
               </tbody>
             </table>
-            {!categories.data?.length && <Empty title="No categories" />}
+            {catTable.empty && <Empty title="No categories" />}
+            <TablePager page={catTable.page} pages={catTable.pages} total={catTable.total} onPage={catTable.setPage} noun="categories" />
           </Card>
         </>
       )}
 
       {tab === "suppliers" && (
         <>
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <TableSearch value={supplierTable.search} onChange={supplierTable.setSearch} placeholder="Search suppliers" className="max-w-xs" />
             {canWrite && <Button onClick={() => setSupModal({ open: true })}>New supplier</Button>}
           </div>
           <Card className="overflow-hidden">
             <table className="app-table w-full">
               <thead>
                 <tr>
-                  <Th>Supplier</Th>
+                  <SortTh id="name" sortKey={supplierTable.sortKey} sortDir={supplierTable.sortDir} onSort={supplierTable.toggleSort}>
+                    Supplier
+                  </SortTh>
                   <Th>Phone</Th>
                   <Th>GSTIN</Th>
                   <Th>Terms</Th>
                 </tr>
               </thead>
               <tbody>
-                {(suppliers.data ?? []).map((s) => (
+                {supplierTable.rows.map((s) => (
                   <tr key={s._id} className={canWrite ? "cursor-pointer hover:bg-paper/80" : ""} onClick={() => canWrite && setSupModal({ open: true, id: s._id })}>
                     <Td>
                       <div className="font-medium">{s.name}</div>
@@ -768,7 +861,8 @@ export function InventoryPage() {
                 ))}
               </tbody>
             </table>
-            {!suppliers.data?.length && <Empty title="No suppliers" hint="Vendors for media, ink and finishing supplies." />}
+            {supplierTable.empty && <Empty title="No suppliers" hint="Vendors for media, ink and finishing supplies." />}
+            <TablePager page={supplierTable.page} pages={supplierTable.pages} total={supplierTable.total} onPage={supplierTable.setPage} noun="suppliers" />
           </Card>
         </>
       )}
@@ -776,15 +870,22 @@ export function InventoryPage() {
       {tab === "units" && (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="overflow-hidden lg:col-span-2">
+            <div className="border-b border-line p-3">
+              <TableSearch value={unitTable.search} onChange={unitTable.setSearch} placeholder="Search units" className="max-w-xs" />
+            </div>
             <table className="app-table w-full">
               <thead>
                 <tr>
-                  <Th>Code</Th>
-                  <Th>Name</Th>
+                  <SortTh id="code" sortKey={unitTable.sortKey} sortDir={unitTable.sortDir} onSort={unitTable.toggleSort}>
+                    Code
+                  </SortTh>
+                  <SortTh id="name" sortKey={unitTable.sortKey} sortDir={unitTable.sortDir} onSort={unitTable.toggleSort}>
+                    Name
+                  </SortTh>
                 </tr>
               </thead>
               <tbody>
-                {(units.data ?? []).map((u) => (
+                {unitTable.rows.map((u) => (
                   <tr key={u.code}>
                     <Td mono>{u.code}</Td>
                     <Td>{u.name}</Td>
@@ -792,6 +893,8 @@ export function InventoryPage() {
                 ))}
               </tbody>
             </table>
+            {unitTable.empty && <Empty title="No units" />}
+            <TablePager page={unitTable.page} pages={unitTable.pages} total={unitTable.total} onPage={unitTable.setPage} noun="units" />
           </Card>
           {canAdjust && (
             <Card className="p-5">
