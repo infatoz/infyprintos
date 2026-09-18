@@ -4,6 +4,7 @@ import helmet from "helmet";
 import compression from "compression";
 import pinoHttp from "pino-http";
 import mongoose from "mongoose";
+import fs from "fs";
 import path from "path";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
@@ -23,10 +24,32 @@ import reportsRoutes from "./modules/reports/reports.routes";
 import settingsRoutes from "./modules/settings/settings.routes";
 import publicRoutes from "./modules/public/public.routes";
 
+function webRoot() {
+  const dir = path.resolve(process.env.WEB_DIR || path.join(process.cwd(), "web"));
+  return fs.existsSync(path.join(dir, "index.html")) ? dir : null;
+}
+
+function isApiPath(pathname: string) {
+  return (
+    pathname.startsWith(env.apiPrefix) ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/public") ||
+    pathname.startsWith("/uploads") ||
+    pathname === "/health" ||
+    pathname.startsWith("/health/")
+  );
+}
+
 export function createApp() {
   const app = express();
+  const webDir = webRoot();
   app.set("trust proxy", 1);
-  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: webDir ? false : undefined
+    })
+  );
   app.use(compression());
   app.use(cors({ origin: env.corsOrigin.split(","), credentials: true }));
   app.use(express.json({ limit: "10mb" }));
@@ -39,18 +62,20 @@ export function createApp() {
   );
   app.use("/uploads", express.static(path.resolve(env.uploadDir)));
 
-  app.get("/", (_req, res) => {
-    res.json({
-      success: true,
-      message: "Infy PrintOS API",
-      data: {
-        service: "infy-printos-api",
-        health: "/health",
-        api: env.apiPrefix,
-        app: env.appUrl
-      }
+  if (!webDir) {
+    app.get("/", (_req, res) => {
+      res.json({
+        success: true,
+        message: "Infy PrintOS API",
+        data: {
+          service: "infy-printos-api",
+          health: "/health",
+          api: env.apiPrefix,
+          app: env.appUrl
+        }
+      });
     });
-  });
+  }
 
   app.get("/health", (_req, res) => {
     const mongoUp = mongoose.connection.readyState === 1;
@@ -83,6 +108,17 @@ export function createApp() {
   app.use(`${env.apiPrefix}/reports`, reportsRoutes);
   app.use(`${env.apiPrefix}/settings`, settingsRoutes);
   app.use("/public", publicRoutes);
+
+  if (webDir) {
+    app.use(express.static(webDir, { index: false, maxAge: env.isProd ? "7d" : 0 }));
+    app.get("*", (req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      if (isApiPath(req.path)) return next();
+      res.sendFile(path.join(webDir, "index.html"), (err) => {
+        if (err) next(err);
+      });
+    });
+  }
 
   app.use(notFound);
   app.use(errorHandler);
