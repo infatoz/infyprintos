@@ -1,0 +1,15 @@
+{
+  "name": "printing-erp",
+  "private": true,
+  "description": "Infy PrintOS — printing operations",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "seed": "npm --prefix backend run seed",
+    "typecheck": "npm --prefix backend run lint && npm --prefix frontend run lint",
+    "test": "npm --prefix backend test",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "format": "npx prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"docs/**/*.md\""
+  }
+}
