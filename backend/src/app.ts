@@ -79,8 +79,9 @@ export function createApp() {
 
   app.get("/health", (_req, res) => {
     const mongoUp = mongoose.connection.readyState === 1;
-    res.status(mongoUp || env.nodeEnv === "test" ? 200 : 503).json({
-      ok: mongoUp || env.nodeEnv === "test",
+    res.status(200).json({
+      ok: true,
+      ready: mongoUp || env.nodeEnv === "test",
       service: "infy-printos-api",
       time: new Date().toISOString(),
       mongo: mongoUp ? "up" : "down"

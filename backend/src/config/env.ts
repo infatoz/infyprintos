@@ -42,7 +42,11 @@ const parsed = envSchema.safeParse({
   APP_URL: process.env.APP_URL,
   API_PREFIX: process.env.API_PREFIX,
   PORT: process.env.PORT,
-  MONGODB_URI: process.env.MONGODB_URI ?? "mongodb://localhost:27018/printing_erp",
+    MONGODB_URI:
+      process.env.MONGODB_URI ??
+      process.env.MONGO_URL ??
+      process.env.DATABASE_URL ??
+      "mongodb://localhost:27018/printing_erp",
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? "dev-access-secret-change-me-please-32",
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? "dev-refresh-secret-change-me-please-32",
   JWT_ACCESS_EXPIRES: process.env.JWT_ACCESS_EXPIRES,
@@ -59,11 +63,22 @@ const parsed = envSchema.safeParse({
 });
 
 if (!parsed.success) {
-  console.error("Invalid environment configuration", parsed.error.flatten());
-  throw new Error("Invalid environment configuration");
+  const details = parsed.error.flatten();
+  console.error("Invalid environment configuration", JSON.stringify(details));
+  throw new Error(`Invalid environment configuration: ${JSON.stringify(details.fieldErrors)}`);
 }
 
 const raw = parsed.data;
+
+function withDatabaseName(uri: string) {
+  try {
+    const parsedUri = new URL(uri);
+    if (!parsedUri.pathname || parsedUri.pathname === "/") parsedUri.pathname = "/printing_erp";
+    return parsedUri.toString();
+  } catch {
+    return uri;
+  }
+}
 
 export const env = {
   nodeEnv: raw.NODE_ENV,
@@ -72,7 +87,7 @@ export const env = {
   port: raw.PORT,
   appUrl: raw.APP_URL,
   apiPrefix: raw.API_PREFIX,
-  mongoUri: raw.MONGODB_URI,
+  mongoUri: withDatabaseName(raw.MONGODB_URI),
   jwtAccessSecret: raw.JWT_ACCESS_SECRET,
   jwtRefreshSecret: raw.JWT_REFRESH_SECRET,
   jwtAccessExpires: raw.JWT_ACCESS_EXPIRES,
