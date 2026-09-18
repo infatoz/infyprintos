@@ -77,8 +77,12 @@ async function seed() {
   }
 
   const passwordHash = await bcrypt.hash(env.seedOwnerPassword, env.bcryptRounds);
+  const existingOwner =
+    (await User.findOne({ organizationId: org._id, email: env.seedOwnerEmail })) ||
+    (await User.findOne({ organizationId: org._id, email: "owner@infatoz.com" })) ||
+    (await User.findOne({ organizationId: org._id, roleId: roles.owner._id }));
   await User.findOneAndUpdate(
-    { organizationId: org._id, email: env.seedOwnerEmail },
+    existingOwner ? { _id: existingOwner._id } : { organizationId: org._id, email: env.seedOwnerEmail },
     {
       name: env.seedOwnerName,
       email: env.seedOwnerEmail,

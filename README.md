@@ -37,7 +37,7 @@ npm run dev
 
 **Default owner login**
 
-- Email: `owner@infatoz.com`
+- Email: `printfactorykoteshwara@gmail.com`
 - Password: `Owner@12345`
 
 Change these in `.env` before any production use.

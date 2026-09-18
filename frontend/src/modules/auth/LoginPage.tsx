@@ -9,7 +9,7 @@ import { useTheme } from "@/stores/theme";
 import { APP_NAME, APP_SHORT, APP_TAGLINE } from "@/lib/brand";
 
 const EMAIL_KEY = "infatoz_login_email";
-const SEED_EMAIL = "owner@infatoz.com";
+const SEED_EMAIL = "printfactorykoteshwara@gmail.com";
 
 function readSavedEmail() {
   try {

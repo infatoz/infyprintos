@@ -22,9 +22,9 @@ const envSchema = z
     MAX_FILE_SIZE_MB: z.coerce.number().min(1).max(100).default(25),
     CORS_ORIGIN: z.string().default("http://localhost:5173"),
     LOG_LEVEL: z.string().optional(),
-    SEED_OWNER_EMAIL: z.string().email().default("owner@infatoz.com"),
+    SEED_OWNER_EMAIL: z.string().email().default("printfactorykoteshwara@gmail.com"),
     SEED_OWNER_PASSWORD: z.string().min(8).default("Owner@12345"),
-    SEED_OWNER_NAME: z.string().default("Infatoz Owner")
+    SEED_OWNER_NAME: z.string().default("Print Factory Owner")
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV !== "production") return;
